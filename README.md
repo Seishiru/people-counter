@@ -1,79 +1,139 @@
+---
 
-# Real-Time People Counting System with YOLOv8 and OpenCV
+# 👥 People Counting Using YOLOv8 and OpenCV
 
+This project uses **YOLOv8** object detection and **OpenCV tracking** to count the number of people entering or exiting through a doorway (or across a defined line) in a video feed.
+It can be used for **crowd analytics, shop entrances, or security monitoring**.
 
-![People Counting](https://github.com/epcm18/PeopleCounting-ComputerVision/assets/104779449/9b33bba6-c9ce-4144-b90d-3e294a655b96)
+---
 
-This repository contains the code for a real-time people-counting system using YOLOv8 and OpenCV. The system utilizes YOLOv8, a state-of-the-art object detection algorithm, to detect people in images and videos. Additionally, it includes a custom class that can be used for detecting people without relying on YOLOv8.
+## 🧠 Overview
 
-## Table of Contents
+The system detects people in each video frame using **Ultralytics YOLOv8**, assigns them unique IDs via a custom **object tracker**, and counts how many people cross a specific line in either direction (Up / Down).
 
-- [Introduction](#introduction)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Custom People Detection](#custom-people-detection)
-- [Contributing](#contributing)
-- [License](#license)
+### ✨ Features
 
-## Introduction
+* 🚶 Detects and tracks multiple people simultaneously
+* 🔄 Counts people **entering and exiting** across a line
+* 🧩 Works with **pre-recorded videos** or **live camera feed**
+* 💾 Exports an annotated video with tracking and count overlay
+* ⚡ Built with **Python**, **OpenCV**, **cvzone**, and **YOLOv8**
 
-The real-time people-counting system is designed to detect and count the number of people present in images or live video streams. YOLOv8, which stands for "You Only Look Once version 8," is a deep learning-based object detection model that can recognize multiple objects in an image simultaneously. This system utilizes YOLOv8 as the core object detection algorithm and integrates it with OpenCV to achieve real-time detection.
+---
 
-## Installation
+## 📁 Project Structure
 
-To use the real-time people counting system, follow these steps to set up the environment:
+```
+PeopleCounting-ComputerVision/
+│
+├── 📁 data/              → Input videos (e.g., 3.mp4)
+├── 📁 models/            → Pretrained YOLOv8 weights (yolov8s.pt)
+├── 📁 outputs/           → Processed videos with annotations
+├── 📁 src/               → Source code
+│   └── countingYolov8.py (Main script)
+├── 📁 utils/             → Helper files (tracker, coco.names)
+├── requirements.txt      → Python dependencies
+└── README.md             → Project documentation
+```
 
-1. Clone this GitHub repository to your local machine:
+---
 
-   \`git clone https://github.com/epcm18/PeopleCounting-ComputerVision.git`
-   
+## ⚙️ Installation
 
-2. Install the required dependencies. It is recommended to create a virtual environment before installing the dependencies:
+### 1️⃣ Clone the repository
 
-   \`python -m venv venv\`
-   \`source venv/bin/activate\`  # On Windows, use \`venv\Scripts\activate\`
+```bash
+git clone https://github.com/yourusername/PeopleCounting-ComputerVision.git
+cd PeopleCounting-ComputerVision
+```
 
-   Install dependencies:
+### 2️⃣ Create and activate a virtual environment
 
-   \`pip install -r requirements.txt\`
+```bash
+python -m venv venv
+venv\Scripts\activate   # For Windows
+# source venv/bin/activate   # For macOS/Linux
+```
 
-## Usage
+### 3️⃣ Install dependencies
 
-This we can use to detect people in a camera frame and also get a count of people who are present on the screen now.
+```bash
+pip install -r requirements.txt
+```
 
-### Running the People Counting System
+Example of what’s inside `requirements.txt`:
 
-To run the real-time people counting system using YOLOv8 and OpenCV, execute the following command:
+```
+ultralytics
+opencv-python
+cvzone
+pandas
+numpy
+```
 
-\`python countingYolov8.py\`
+---
 
-This will start the application, and it will use your webcam by default to capture live video and count the number of people in the frames. The processed video with bounding boxes around detected people and the count will be displayed in real-time.
+## 🚀 Running the Project
 
-### Keyboard Shortcuts
+### ▶️ From a video file
 
-- **'Esc'**: Quit the application.
+Place your input video (e.g., `3.mp4`) in the `data/` folder.
 
-## Custom People Detection
+Then run:
 
-Apart from using YOLOv8, this repository also includes a custom class for detecting people. The custom people detection class can be found in \`custom_people_detection.py\`.
+```bash
+cd src
+python countingYolov8.py
+```
 
-To use the custom people detection class, follow these steps:
+* Input video: `data/3.mp4`
+* Output video: `outputs/output_final.avi`
 
-1. Import the class in your script:
+You’ll see:
 
-   \`from Person import Myperson\`
+* A live display of the video feed
+* People being tracked with bounding boxes
+* “Up” and “Down” counts shown on screen
 
-2. Create an instance of the \`Myperson\` class:
+---
 
-   \`people_detector = Myperson()\`
-   
-4. To detect multiple people going with each other import \`ManyPeople`\ class
+## 🎥 Switching to Live Camera Mode (Optional)
 
-## Contributing
+To use your webcam instead of a video file, edit this line in `countingYolov8.py`:
 
-Contributions to this real-time people counting system are welcome. If you have any ideas, bug fixes, or improvements, please open an issue or submit a pull request.
+```python
+# cap = cv2.VideoCapture(os.path.join(BASE_DIR, 'data', '3.mp4'))
+cap = cv2.VideoCapture(0)  # Use webcam instead
+```
 
-When contributing to this repository, please first discuss the changes you wish to make by opening an issue. 
+Then re-run the script:
 
+```bash
+python countingYolov8.py
+```
 
+---
 
+## 📊 Output Example
+
+* Bounding boxes drawn on each person
+* Tracking IDs assigned dynamically
+* Counter display at top-left corner
+* Saved annotated video at `outputs/output_final.avi`
+
+---
+
+## 👩‍💻 Team Notes
+
+* You can adjust the **counting lines** (`cy1`, `cy2`) in the script to fit your camera angle.
+* The **model weight** (`yolov8s.pt`) is small and fast — you can replace it with `yolov8m.pt` or `yolov8l.pt` for better accuracy.
+* The tracker logic is in `utils/tracker.py`.
+
+---
+
+## 🧾 License
+
+This project is open-source under the **MIT License**.
+Feel free to modify and use it for academic or commercial purposes.
+
+---
