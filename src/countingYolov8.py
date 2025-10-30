@@ -16,8 +16,8 @@ from tracker import Tracker
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 MODEL_PATH = os.path.join(BASE_DIR, 'models', 'yolov8s.pt')
 COCO_PATH = os.path.join(BASE_DIR, 'utils', 'coco.names')
-VIDEO_PATH = os.path.join(BASE_DIR, 'data', '3.mp4')
-OUTPUT_PATH = os.path.join(BASE_DIR, 'outputs', 'output_final.avi')
+VIDEO_PATH = os.path.join(BASE_DIR, 'data', 'angelo.mp4')
+OUTPUT_PATH = os.path.join(BASE_DIR, 'outputs', 'output_angelo.avi')
 
 # ==========================================
 # MODEL AND SETUP
@@ -32,12 +32,17 @@ cv2.namedWindow('RGB')
 cv2.setMouseCallback('RGB', RGB)
 cap = cv2.VideoCapture(VIDEO_PATH)
 
-# Output video writer
+# Get actual video resolution
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+# Output video writer (use actual size)
 output = cv2.VideoWriter(
     OUTPUT_PATH,
     cv2.VideoWriter_fourcc(*'XVID'),
-    30,
-    (1020, 500)
+    fps,
+    (frame_width, frame_height)
 )
 
 # Load class names
@@ -45,12 +50,22 @@ with open(COCO_PATH, 'r') as file:
     class_list = file.read().strip().split('\n')
 
 count = 0
-persondown = {}
-personup = {}
-counter1, counter2 = [], []
 tracker = Tracker()
 
-cy1, cy2, offset = 194, 220, 6
+# ==========================================
+# RECTANGLE ZONES - FIXED COORDINATES
+# ==========================================
+# Define zones that make sense for your video
+# Format: (x1, y1, x2, y2)
+entry_zone = (50, 200, 300, frame_height - 100)   # Left side zone
+exit_zone = (frame_width - 300, 200, frame_width - 50, frame_height - 100)  # Right side zone
+
+# ==========================================
+# TRACKING AND COUNTING VARIABLES
+# ==========================================
+tracked_objects = {}  # Stores object state: {id: {'entry_seen': bool, 'exit_seen': bool, 'counted_enter': bool, 'counted_exit': bool}}
+enter_counter = set()  # Use sets to avoid duplicates
+exit_counter = set()
 
 # ==========================================
 # MAIN LOOP
@@ -64,7 +79,6 @@ while True:
     if count % 3 != 0:
         continue
 
-    frame = cv2.resize(frame, (1020, 500))
     results = model.predict(frame)
     a = results[0].boxes.data
     px = pd.DataFrame(a).astype("float")
@@ -82,39 +96,58 @@ while True:
         cx, cy = (x3 + x4) // 2, (y3 + y4) // 2
         cv2.circle(frame, (cx, cy), 4, (255, 0, 255), -1)
 
-        # Down direction
-        if cy1 < (cy + offset) and cy1 > (cy - offset):
-            cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 0, 255), 2)
+        # Initialize tracking for new object
+        if id not in tracked_objects:
+            tracked_objects[id] = {
+                'entry_seen': False,
+                'exit_seen': False,
+                'counted_enter': False,
+                'counted_exit': False
+            }
+
+        # Check if person is in entry zone (left side)
+        if entry_zone[0] < cx < entry_zone[2] and entry_zone[1] < cy < entry_zone[3]:
+            tracked_objects[id]['entry_seen'] = True
+            cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 0, 255), 2)  # Red for entry zone
             cvzone.putTextRect(frame, f'{id}', (x3, y3), 1, 2)
-            persondown[id] = (cx, cy)
 
-        if id in persondown:
-            if cy2 < (cy + offset) and cy2 > (cy - offset):
-                cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 255), 2)
-                cvzone.putTextRect(frame, f'{id}', (x3, y3), 1, 2)
-                if id not in counter1:
-                    counter1.append(id)
-
-        # Up direction
-        if cy2 < (cy + offset) and cy2 > (cy - offset):
-            cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 0), 2)
+        # Check if person is in exit zone (right side)
+        if exit_zone[0] < cx < exit_zone[2] and exit_zone[1] < cy < exit_zone[3]:
+            tracked_objects[id]['exit_seen'] = True
+            cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 0), 2)  # Green for exit zone
             cvzone.putTextRect(frame, f'{id}', (x3, y3), 1, 2)
-            personup[id] = (cx, cy)
 
-        if id in personup:
-            if cy1 < (cy + offset) and cy1 > (cy - offset):
-                cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 255), 2)
-                cvzone.putTextRect(frame, f'{id}', (x3, y3), 1, 2)
-                if id not in counter2:
-                    counter2.append(id)
+        # COUNTING LOGIC:
+        # Person ENTERED: First seen in exit zone, then seen in entry zone
+        if (tracked_objects[id]['exit_seen'] and 
+            entry_zone[0] < cx < entry_zone[2] and entry_zone[1] < cy < entry_zone[3] and
+            not tracked_objects[id]['counted_enter']):
+            
+            enter_counter.add(id)
+            tracked_objects[id]['counted_enter'] = True
+            cv2.rectangle(frame, (x3, y3), (x4, y4), (255, 0, 0), 3)  # Blue for counted enter
+            cvzone.putTextRect(frame, f'ENTER {id}', (x3, y3-30), 1, 2)
 
-    # Lines
-    cv2.line(frame, (3, cy1), (1018, cy1), (0, 255, 0), 2)
-    cv2.line(frame, (5, cy2), (1019, cy2), (0, 255, 255), 2)
+        # Person EXITED: First seen in entry zone, then seen in exit zone  
+        if (tracked_objects[id]['entry_seen'] and 
+            exit_zone[0] < cx < exit_zone[2] and exit_zone[1] < cy < exit_zone[3] and
+            not tracked_objects[id]['counted_exit']):
+            
+            exit_counter.add(id)
+            tracked_objects[id]['counted_exit'] = True
+            cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 255), 3)  # Yellow for counted exit
+            cvzone.putTextRect(frame, f'EXIT {id}', (x3, y3-30), 1, 2)
 
-    downcount, upcount = len(counter1), len(counter2)
-    cvzone.putTextRect(frame, f'Down: {downcount}', (50, 60), 2, 2)
-    cvzone.putTextRect(frame, f'Up: {upcount}', (50, 160), 2, 2)
+    # Draw entry and exit rectangles
+    cv2.rectangle(frame, (entry_zone[0], entry_zone[1]), (entry_zone[2], entry_zone[3]), (0, 0, 255), 2)
+    cv2.rectangle(frame, (exit_zone[0], exit_zone[1]), (exit_zone[2], exit_zone[3]), (0, 255, 0), 2)
+    cvzone.putTextRect(frame, 'Entry Zone', (entry_zone[0] + 10, entry_zone[1] - 30), 1, 2)
+    cvzone.putTextRect(frame, 'Exit Zone', (exit_zone[0] - 100, exit_zone[1] - 30), 1, 2)
+
+    # Show counts
+    downcount, upcount = len(enter_counter), len(exit_counter)
+    cvzone.putTextRect(frame, f'Entered: {downcount}', (50, 60), 2, 2)
+    cvzone.putTextRect(frame, f'Exited: {upcount}', (50, 160), 2, 2)
 
     output.write(frame)
     cv2.imshow('RGB', frame)
@@ -125,3 +158,5 @@ while True:
 cap.release()
 output.release()
 cv2.destroyAllWindows()
+
+print(f"Final Count - Entered: {len(enter_counter)}, Exited: {len(exit_counter)}")
